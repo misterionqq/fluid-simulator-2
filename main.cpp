@@ -59,8 +59,10 @@ int main(int argc, char* argv[]) {
     //==============================//
 
     int T = 1'000'000;
+    auto timer = std::chrono::steady_clock::now();
     for (int i = 0; i < T; ++i) {
         // Check if a save has been requested
+        /*
         if (save_flag) {
             std::cout << "\nSaving current position..." << std::endl;
             saveFile.close();
@@ -89,10 +91,17 @@ int main(int argc, char* argv[]) {
             if (exit_flag) {
                 break;
             }
-        }
 
+        }
+*/
         fluid->next(std::cout);
+        if (i == 10000) {
+            break;
+        }
     }
+    std::cout << "\n\nВремя выполнения 10'000 тиков: ";
+    std::cout << std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - timer).count()
+              << std::endl;
 
     // Cleanup and termination
     input.close();

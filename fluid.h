@@ -56,27 +56,37 @@ namespace Pepega {
             velocity_flow_t ret{};
             for (auto [dx, dy] : deltas) {
                 int nx = x + dx, ny = y + dy;
-                if (nx < 0 || nx >= N || ny < 0 || ny >= M) continue;
-                if (field[nx][ny] != '#' && last_use[nx][ny] < UT) {
-                    velocity_t cap = velocity.get(x, y, dx, dy);
-                    velocity_flow_t flow = velocity_flow.get(x, y, dx, dy);
-                    if (fabs(flow - velocity_flow_t(cap)) <= 0.0001) {
-                        continue;
-                    }
-                    velocity_flow_t vp = std::min(lim, velocity_flow_t(cap) - flow);
-                    if (last_use[nx][ny] == UT - 1) {
-                        velocity_flow.add(x, y, dx, dy, vp);
-                        last_use[x][y] = UT;
-                        return {vp, true, {nx, ny}};
-                    }
-                    auto [t, prop, end] = propagate_flow(nx, ny, vp);
-                    ret += t;
-                    if (prop) {
-                        velocity_flow.add(x, y, dx, dy, t);
-                        last_use[x][y] = UT;
-                        return {t, prop && end != pair(x, y), end};
-                    }
+                if (field[nx][ny] == '#' || last_use[nx][ny] >= UT) {
+                    continue;
                 }
+                if (nx < 0 || nx >= N || ny < 0 || ny >= M) continue;
+
+                velocity_t cap = velocity.get(x, y, dx, dy);
+                velocity_flow_t flow = velocity_flow.get(x, y, dx, dy);
+                if (fabs(flow - velocity_flow_t(cap)) <= 0.0001) {
+                    continue;
+                }
+                velocity_flow_t vp = std::min(lim, velocity_flow_t(cap) - flow);
+                if (last_use[nx][ny] == UT - 1) {
+                    velocity_flow.add(x, y, dx, dy, vp);
+                    last_use[x][y] = UT;
+                    return {vp, true, {nx, ny}};
+                }
+                    //auto [t, prop, end] = propagate_flow(nx, ny, vp);
+                velocity_flow_t t;
+                bool prop;
+                std::pair<int, int> end;
+                do {
+                    std::tie(t, prop, end) = propagate_flow(nx, ny, vp);
+                } while (end == std::pair(nx, ny));
+
+                ret += t;
+                if (prop) {
+                    velocity_flow.add(x, y, dx, dy, t);
+                    last_use[x][y] = UT;
+                    return {t, prop && end != pair(x, y), end};
+                }
+
             }
             last_use[x][y] = UT;
             return {ret, false, {0, 0}};
