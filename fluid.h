@@ -253,18 +253,18 @@ namespace Pepega {
             return ret;
         }
 
-        void apply_external_forces() {
+        void g_tasks_mission() {
             main_handler.set(&g_tasks);
             main_handler.wait();
         }
 
-        void apply_p_forces() {
+        void p_tasks_mission() {
             old_p = p;
             main_handler.set(&p_tasks);
             main_handler.wait();
         }
 
-        void apply_forces_on_flow() {
+        void flow_mission() {
             velocity_flow.v.clear();
             int cnt = 0;
             bool prop;
@@ -353,9 +353,9 @@ namespace Pepega {
                     }
                 }
                 */
-            apply_external_forces();
-            apply_p_forces();
-            apply_forces_on_flow();
+            g_tasks_mission();
+            p_tasks_mission();
+            flow_mission();
             recalculate_p();
             output_handler.wait();
 

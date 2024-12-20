@@ -65,7 +65,6 @@ int main(int argc, char* argv[]) {
     auto timer = std::chrono::steady_clock::now();
     for (int i = 0; i < T; ++i) {
         // Check if a save has been requested
-        /*
         if (save_flag) {
             std::cout << "\nSaving current position..." << std::endl;
             saveFile.close();
@@ -96,22 +95,20 @@ int main(int argc, char* argv[]) {
             }
 
         }
-        */
-        std::cout << "Tick " << i << ":\n";
+        //std::cout << "Tick " << i << ":\n";
         fluid->next(i);
-        if (i == 10000) {
-            break;
-        }
+        //if (i == 10000) break;
     }
-
-    //std::cout.flush();
+    /*
+    std::cout.flush();
     std::cout << "\n\nВремя выполнения 10'000 тиков: ";
     std::cout << std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - timer).count()
               << std::endl;
-
+    */
     std::cout << "Used threads: " << thread_count << std::endl;
     //std::cout.flush();
     //fluid->kill_everyone();
+
     // Cleanup and termination
     input.close();
     saveFile.close();
