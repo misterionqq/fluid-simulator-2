@@ -28,11 +28,12 @@ namespace Pepega {
 
     class fluid_base {
     public:
-        virtual void next(std::optional<std::reference_wrapper<std::ostream>> out) = 0;
+        virtual void next(int) = 0;
         virtual void load(std::ifstream& file) = 0;
         virtual void save(std::ofstream& file) = 0;
 
         virtual void init_workers(int) = 0;
+        virtual void kill_everyone() = 0;
 
         virtual ~fluid_base() = default;
     };
@@ -46,6 +47,11 @@ namespace Pepega {
         int N = value_N;
         int M = value_M;
 
+        using p_type = p_t;
+        using v_type = velocity_t;
+        using vf_type = velocity_flow_t;
+        using full_type = fluid<p_t, velocity_t, velocity_flow_t, value_N, value_M>;
+
         Array<char, value_N, value_M> field{};
         Array<p_t, value_N, value_M> p{}, old_p{};
         Array<int64_t, value_M, value_M> dirs{};
@@ -53,17 +59,54 @@ namespace Pepega {
         VectorField<velocity_t, value_N, value_M> velocity = {};
         VectorField<velocity_flow_t, value_N, value_M> velocity_flow = {};
         int UT = 0;
+        int last_active = 0;
         p_t rho[256];
 
         Array<std::mutex, value_N, value_M> p_mutex{};
 
-        std::vector<std::unique_ptr<Task>> g_tasks;
-        std::vector<std::unique_ptr<Task>> p_tasks;
-        std::vector<std::unique_ptr<Task>> recalc_p_tasks;
-        std::vector<std::unique_ptr<Task>> output_field_task;
+        std::vector<std::unique_ptr<Mission>> g_tasks;
+        std::vector<std::unique_ptr<Mission>> p_tasks;
+        std::vector<std::unique_ptr<Mission>> recalc_p_tasks;
+        std::vector<std::unique_ptr<Mission>> output_field_task;
 
-        WorkerHandler main_handler{};
-        WorkerHandler output_handler{};
+        BuddiesForeman main_handler{};
+        BuddiesForeman output_handler{};
+
+        void update_p(int x, int y, const p_t &val) {
+            std::lock_guard lock(p_mutex[x][y]);
+            p[x][y] += val;
+        }
+
+        void init() {
+            velocity_flow.v.init(N, M);
+            dirs.init(N, M);
+            old_p.init(N, M);
+            last_use.init(N, M);
+            p.init(N, M);
+            old_p.init(N, M);
+            p_mutex.init(N, M);
+
+            for (int i = 0; i < N; i++) {
+                g_tasks.push_back(std::make_unique<g_mission<full_type>>(i, *this));
+                p_tasks.push_back(std::make_unique<p_mission<full_type>>(i, *this));
+                recalc_p_tasks.push_back(std::make_unique<p_recalculation<full_type>>(i, *this));
+            }
+
+            output_field_task.push_back(std::make_unique<field_output<full_type>>(*this));
+
+
+            rho[' '] = 0.01;
+            rho['.'] = 1000ll;
+            for (int x = 0; x < N; ++x) {
+                for (int y = 0; y < M; ++y) {
+                    if (field[x][y] == '#')
+                        continue;
+                    for (auto [dx, dy]: deltas) {
+                        dirs[x][y] += (field[x + dx][y + dy] != '#');
+                    }
+                }
+            }
+        }
 
         std::tuple<velocity_flow_t, bool, pair<int, int>> propagate_flow(int x, int y, velocity_flow_t lim) {
             last_use[x][y] = UT - 1;
@@ -106,24 +149,32 @@ namespace Pepega {
             return {ret, false, {0, 0}};
         }
 
-        void propagate_stop(int x, int y, bool force = false) {
-            if (!force) {
-                for (auto [dx, dy] : deltas) {
-                    int nx = x + dx, ny = y + dy;
-                    if (nx < 0 || nx >= N || ny < 0 || ny >= M) continue;
-                    if (field[nx][ny] != '#' && last_use[nx][ny] < UT - 1 && velocity.get(x, y, dx, dy) > 0ll) {
-                        return;
-                    }
+        inline bool is_stoppable(int x, int y) {
+            for (auto [dx, dy]: deltas) {
+                int nx = x + dx, ny = y + dy;
+                if (field[nx][ny] != '#' && last_use[nx][ny] < UT - 1 && velocity.get(x, y, dx, dy) > int64_t(0)) {
+                    return false;
                 }
             }
-            last_use[x][y] = UT;
-            for (auto [dx, dy] : deltas) {
-                int nx = x + dx, ny = y + dy;
-                if (nx < 0 || nx >= N || ny < 0 || ny >= M) continue;
-                if (field[nx][ny] == '#' || last_use[nx][ny] == UT || velocity.get(x, y, dx, dy) > 0ll) {
-                    continue;
+            return true;
+        }
+
+        void propagate_stop(int x_, int y_) {
+            std::stack<std::pair<int, int>> nxt;
+            nxt.emplace(x_, y_);
+            last_use[x_][y_] = UT;
+            while (not nxt.empty()) {
+                auto [x, y] = nxt.top();
+                nxt.pop();
+                for (auto [dx, dy]: deltas) {
+                    int nx = x + dx, ny = y + dy;
+                    if (field[nx][ny] == '#' || last_use[nx][ny] == UT || velocity.get(x, y, dx, dy) > int64_t(0) ||
+                        not is_stoppable(nx, ny)) {
+                        continue;
+                    }
+                    last_use[nx][ny] = UT;
+                    nxt.emplace(nx, ny);
                 }
-                propagate_stop(nx, ny);
             }
         }
 
@@ -202,37 +253,69 @@ namespace Pepega {
             return ret;
         }
 
-        void init() {
-            velocity_flow.v.init(N, M);
-            dirs.init(N, M);
-            old_p.init(N, M);
+        void apply_external_forces() {
+            main_handler.set(&g_tasks);
+            main_handler.wait();
+        }
 
-            rho[' '] = 0.01;
-            rho['.'] = 1000ll;
+        void apply_p_forces() {
+            old_p = p;
+            main_handler.set(&p_tasks);
+            main_handler.wait();
+        }
+
+        void apply_forces_on_flow() {
+            velocity_flow.v.clear();
+            int cnt = 0;
+            bool prop;
+            do {
+                cnt++;
+                UT += 2;
+                prop = false;
+                for (int x = 0; x < N; x++) {
+                    for (int y = 0; y < M; y++) {
+                        if (field[x][y] == '#' or last_use[x][y] == UT) {
+                            continue;
+                        }
+                        auto [t, _unused1, _unused2] = propagate_flow(x, y, int64_t(1));
+                        if (t > int64_t(0)) {
+                            prop = true;
+                            --y;
+                        }
+                    }
+                }
+            } while (prop);
+        }
+
+        void recalculate_p() {
+            main_handler.set(&recalc_p_tasks);
+            main_handler.wait();
+        }
+
+        bool apply_move_on_flow() {
+            UT += 2;
+            bool prop = false;
             for (int x = 0; x < N; ++x) {
                 for (int y = 0; y < M; ++y) {
-                    if (field[x][y] == '#')
-                        continue;
-                    for (auto [dx, dy]: deltas) {
-                        dirs[x][y] += (field[x + dx][y + dy] != '#');
+                    if (field[x][y] != '#' && last_use[x][y] != UT) {
+                        if (random01<velocity_t>() < move_prob(x, y)) {
+                            prop = true;
+                            propagate_move(x, y, true);
+                        } else {
+                            propagate_stop(x, y);
+                        }
                     }
                 }
             }
+            return prop;
         }
 
-    public:
+    public:  //----------------------------------------------
+
         fluid() = default;
 
-        void init_workers(int n) override {
-            if (n < 1) {
-                throw std::runtime_error("Must be at least 1 thread");
-            }
-            main_handler.init(n);
-            output_handler.init(1);
-        }
-
-
-        void next(std::optional<std::reference_wrapper<std::ostream>> out) override {
+        void next(int out) override {
+            /*
             p_t total_delta_p = 0ll;
 
             // Apply gravity to downward velocities
@@ -269,80 +352,18 @@ namespace Pepega {
                         }
                     }
                 }
-            }
+                */
+            apply_external_forces();
+            apply_p_forces();
+            apply_forces_on_flow();
+            recalculate_p();
+            output_handler.wait();
 
-            velocity_flow = {};
-            bool prop = false;
+            bool prop = apply_move_on_flow();
 
-            // Propagate flow until no further changes occur
-            do {
-                UT += 2;
-                prop = false;
-                for (size_t x = 0; x < N; ++x) {
-                    for (size_t y = 0; y < M; ++y) {
-                        if (field[x][y] != '#' && last_use[x][y] != UT) {
-                            auto [t, local_prop, _] = propagate_flow(x, y, 1ll);
-                            if (t > 0ll) {
-                                prop = true;
-                            }
-                        }
-                    }
-                }
-            } while (prop);
-
-            // Update velocities and pressures based on flow
-            for (size_t x = 0; x < N; ++x) {
-                for (size_t y = 0; y < M; ++y) {
-                    if (field[x][y] == '#')
-                        continue;
-                    for (auto [dx, dy] : deltas) {
-                        velocity_t old_v = velocity.get(x, y, dx, dy);
-                        velocity_flow_t new_v = velocity_flow.get(x, y, dx, dy);
-                        if (old_v > 0ll) {
-                            //assert(velocity_t(new_v) <= old_v); // this buddy ruins DOUBLE :D :D :D
-
-                            velocity.get(x, y, dx, dy) = velocity_t(new_v);
-                            auto force = p_t(old_v - velocity_t(new_v)) * rho[(int) field[x][y]];
-                            if (field[x][y] == '.')
-                                force *= 0.8;
-                            if (field[x + dx][y + dy] == '#') {
-                                p[x][y] += force / dirs[x][y];
-                                total_delta_p += force / dirs[x][y];
-                            } else {
-                                p[x + dx][y + dy] += force / dirs[x + dx][y + dy];
-                                total_delta_p += force / dirs[x + dx][y + dy];
-                            }
-                        }
-                    }
-                }
-            }
-
-            UT += 2;
-            prop = false;
-
-            // Propagate movement or stopping based on probability
-            for (size_t x = 0; x < N; ++x) {
-                for (size_t y = 0; y < M; ++y) {
-                    if (field[x][y] != '#' && last_use[x][y] != UT) {
-                        if (random01<velocity_t>() < move_prob(x, y)) {
-                            prop = true;
-                            propagate_move(x, y, true);
-                        } else {
-                            propagate_stop(x, y, true);
-                        }
-                    }
-                }
-            }
-
-            // Output the field if an output stream is provided
-            if (prop && out) {
-                for (int i = 0; i < N; ++i) {
-                    for (int j = 0; j < M; ++j) {
-                        out->get() << field[i][j];
-                    }
-                    out->get() << std::endl;
-                }
-                std::cout.flush();
+            if (prop) {
+                last_active = out;
+                output_handler.set(&output_field_task);
             }
         }
 
@@ -390,6 +411,24 @@ namespace Pepega {
             load_field(velocity.v, N, M); // Load velocity data
 
             init();
+        }
+
+        friend class g_mission<full_type>;
+        friend class p_mission<full_type>;
+        friend class p_recalculation<full_type>;
+        friend class field_output<full_type>;
+
+        void init_workers(int n) override {
+            if (n < 1) {
+                throw std::runtime_error("Must be at least 1 thread");
+            }
+            main_handler.init(n);
+            output_handler.init(1);
+        }
+
+        void kill_everyone() {
+            main_handler.stop_all();
+            output_handler.stop_all();
         }
 
         void save(std::ofstream &file) override {

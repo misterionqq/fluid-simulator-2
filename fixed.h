@@ -89,10 +89,9 @@ namespace Pepega {
         bool operator==(const Fixed&) const = default;
 
         // Explicit conversion operators to float and double
-        explicit constexpr operator float() { return float(v) / (1LL << K); }
+        explicit constexpr operator float() const { return float(v) / (1LL << K); }
 
-        explicit constexpr operator double() { return double(v) / (1LL << K); }
-
+        explicit constexpr operator double() const { return double(v) / (1LL << K); }
         // Arithmetic operators for Fixed-point arithmetic
         friend Fixed operator+(Fixed a, Fixed b) {
             return Fixed::from_raw(a.v + b.v);

@@ -25,14 +25,14 @@ public:
     }
 
 private:
-    void option(const std::string& optionString) {
-        auto delimiterPos = optionString.find('=');
+    void option(const std::string& opt_string) {
+        auto delimiterPos = opt_string.find('=');
         if (delimiterPos == std::string::npos) {
-            throw std::invalid_argument("Invalid option format: " + optionString);
+            throw std::invalid_argument("Invalid option format: " + opt_string);
         }
 
-        std::string key = optionString.substr(0, delimiterPos);
-        std::string value = optionString.substr(delimiterPos + 1);
+        std::string key = opt_string.substr(0, delimiterPos);
+        std::string value = opt_string.substr(delimiterPos + 1);
         comp_options.emplace(std::move(key), std::move(value));
     }
 

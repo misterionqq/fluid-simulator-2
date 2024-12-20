@@ -16,6 +16,10 @@ namespace Pepega {
 
         void init(int n, int m) {}
 
+        void clear() {
+            std::memset(arr, 0, sizeof(arr));
+        }
+
         T *operator[](int n) {
             return arr[n];
         }
@@ -38,7 +42,20 @@ namespace Pepega {
         void init(int n, int m) {
             N = n;
             M = m;
-            arr.assign(n, std::vector<T>(m, T{}));
+
+            if constexpr (std::is_copy_constructible_v<T>) {
+                arr.assign(n, std::vector<T>(m, T{}));
+            } else {
+                arr.resize(n);
+                for (auto &line: arr) {
+                    std::vector<T> tmp(m);
+                    line.swap(tmp);
+                }
+            }
+        }
+
+        void clear() {
+            arr = std::vector(N, std::vector<T>(M, T{}));
         }
 
         std::vector<T> &operator[](int n) {

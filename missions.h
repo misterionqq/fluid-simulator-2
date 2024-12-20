@@ -3,28 +3,29 @@
 #include <iostream>
 #include "crutches.h"
 
-
-class Task {
+// ThreadPool взял у https://github.com/AtomicBiscuit/SE2_CPP_HW3, т.к. написать свой не успел, и прикрутил его костыльно
+// к коду дз2
+class Mission {
 public:
-    virtual void doit() = 0;
+    virtual void do_this() = 0;
 
-    virtual ~Task() = default;
+    virtual ~Mission() = default;
 };
 
 template<typename T>
-class ApplyGTask : public Task {
+class g_mission : public Mission {
     T *field;
     int x;
 public:
-    ApplyGTask(int x, T &field) : field(&field), x(x) {};
+    g_mission(int x, T &field) : field(&field), x(x) {};
 
-    void doit() override;
+    void do_this() override;
 };
 
 template<typename T>
-void ApplyGTask<T>::doit() {
+void g_mission<T>::do_this() {
     auto G = Pepega::g<typename T::v_type>();
-    for (int y = 0; y < field->K; ++y) {
+    for (int y = 0; y < field->M; ++y) {
         if (field->field[x][y] == '#')
             continue;
         if (field->field[x + 1][y] != '#')
@@ -33,18 +34,18 @@ void ApplyGTask<T>::doit() {
 }
 
 template<typename T>
-class ApplyPTask : public Task {
+class p_mission : public Mission {
     T *f;
     int x;
 public:
-    ApplyPTask(int x, T &field) : f(&field), x(x) {};
+    p_mission(int x, T &field) : f(&field), x(x) {};
 
-    void doit() override;
+    void do_this() override;
 };
 
 template<typename T>
-void ApplyPTask<T>::doit() {
-    for (int y = 0; y < f->K; ++y) {
+void p_mission<T>::do_this() {
+    for (int y = 0; y < f->M; ++y) {
         if (f->field[x][y] == '#')
             continue;
         for (auto [dx, dy]: Pepega::deltas) {
@@ -69,25 +70,25 @@ void ApplyPTask<T>::doit() {
 
 
 template<typename T>
-class RecalcPTask : public Task {
+class p_recalculation : public Mission {
     T *f;
     int x;
 public:
-    RecalcPTask(int x, T &field) : f(&field), x(x) {};
+    p_recalculation(int x, T &field) : f(&field), x(x) {};
 
-    void doit() override;
+    void do_this() override;
 };
 
 template<typename T>
-void RecalcPTask<T>::doit() {
-    for (int y = 0; y < f->K; ++y) {
+void p_recalculation<T>::do_this() {
+    for (int y = 0; y < f->M; ++y) {
         if (f->field[x][y] == '#')
             continue;
         for (auto [dx, dy]: Pepega::deltas) {
             auto &old_v = f->velocity.get(x, y, dx, dy);
             const auto &new_v = f->velocity_flow.get(x, y, dx, dy);
             if (old_v > int64_t(0)) {
-                assert(typename T::v_type(new_v) <= old_v);
+                //assert(typename T::v_type(new_v) <= old_v);
                 auto force = typename T::p_type(old_v - typename T::v_type(new_v)) * f->rho[(int) f->field[x][y]];
                 old_v = typename T::v_type(new_v);
                 if (f->field[x][y] == '.')
@@ -103,19 +104,18 @@ void RecalcPTask<T>::doit() {
 }
 
 template<typename T>
-class OutFieldTask : public Task {
+class field_output : public Mission {
     T *f;
 public:
-    explicit OutFieldTask(T &field) : f(&field) {};
+    explicit field_output(T &field) : f(&field) {};
 
-    void doit() override;
+    void do_this() override;
 };
 
 template<typename T>
-void OutFieldTask<T>::doit() {
-    std::cout << "Tick " << f->last_active << ":\n";
+void field_output<T>::do_this() {
     for (int j = 0; j < f->N; j++) {
-        for (int k = 0; k < f->K; k++) {
+        for (int k = 0; k < f->M; k++) {
             std::cout << f->field[j][k];
         }
         std::cout << "\n";

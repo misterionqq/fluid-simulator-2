@@ -1,7 +1,8 @@
 #include <iostream>
 #include <csignal>
 #include <cstdio>
-
+#include <chrono>
+#include <fstream>
 #include "fluid.h"
 #include "flags-parser.h"
 
@@ -12,8 +13,6 @@ bool exit_flag = false;
 void my_handler(int nsig) {
     save_flag = true;
 }
-
-// Комментарии я делал по шаблону с прошлого курсе с помощью ChatGPT, надеюсь, это простительно
 
 //==============================//
 // Main program execution       //
@@ -43,16 +42,19 @@ int main(int argc, char* argv[]) {
     }
     int N, M;
     input >> N >> M;
-    input.seekg(0, ios::beg);
+    input.seekg(0, std::ios::beg);
 
     // Create the fluid simulation object
     auto fluid = create_fluid(p_type, v_type, v_flow_type, N, M);
 
     std::ofstream saveFile(save_file);
-    if (!input.is_open()) {
+    if (!saveFile.is_open()) {
         throw std::invalid_argument("Can't open file");
     }
 
+    int workers = std::stoi(thread_count);
+
+    fluid->init_workers(workers);
     fluid->load(input);
 
     //==============================//
@@ -94,17 +96,22 @@ int main(int argc, char* argv[]) {
             }
 
         }
-*/
-        fluid->next(std::cout);
+        */
+        std::cout << "Tick " << i << ":\n";
+        fluid->next(i);
         if (i == 10000) {
             break;
         }
     }
+
+    //std::cout.flush();
     std::cout << "\n\nВремя выполнения 10'000 тиков: ";
     std::cout << std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - timer).count()
               << std::endl;
 
     std::cout << "Used threads: " << thread_count << std::endl;
+    //std::cout.flush();
+    //fluid->kill_everyone();
     // Cleanup and termination
     input.close();
     saveFile.close();
