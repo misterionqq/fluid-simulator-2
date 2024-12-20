@@ -23,14 +23,15 @@ int main(int argc, char* argv[]) {
     // Register the signal handler for SIGINT
     (void) signal(SIGINT, my_handler);
 
-    parser optsParser(argc, argv);
+    parser options_parser(argc, argv);
 
     // Retrieve options for input/output files and types
-    auto input_file = optsParser.get_option("--input-file");
-    auto save_file = optsParser.get_option("--save-file");
-    int p_type = get_type(optsParser.get_option("--p-type"));
-    int v_type = get_type(optsParser.get_option("--v-type"));
-    int v_flow_type = get_type(optsParser.get_option("--v-flow-type"));
+    auto input_file = options_parser.get_option("--input-file");
+    auto save_file = options_parser.get_option("--save-file");
+    int p_type = get_type(options_parser.get_option("--p-type"));
+    int v_type = get_type(options_parser.get_option("--v-type"));
+    int v_flow_type = get_type(options_parser.get_option("--v-flow-type"));
+    auto thread_count = options_parser.get_option("--threads");
 
     //==============================//
     // Work with files              //
@@ -103,6 +104,7 @@ int main(int argc, char* argv[]) {
     std::cout << std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - timer).count()
               << std::endl;
 
+    std::cout << "Used threads: " << thread_count << std::endl;
     // Cleanup and termination
     input.close();
     saveFile.close();

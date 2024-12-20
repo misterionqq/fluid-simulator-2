@@ -1,6 +1,6 @@
 #pragma once
 
-// Реализацию Thread pool взял от сюда https://github.com/AtomicBiscuit/SE2_CPP_HW3/tree/main
+// Реализацию Thread pool взял отсюда https://github.com/AtomicBiscuit/SE2_CPP_HW3/tree/main
 // Т.к. времени до дедлайна осталось мало, а экзамены уже начались
 
 #include <atomic>
