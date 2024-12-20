@@ -11,6 +11,8 @@ add_executable(fluid-simulator fixed.h
         fluid-creator.h
         flags-parser.h
         main.cpp
+        missions.h
+        buddies.h
 )
 
 target_compile_definitions(fluid-simulator PRIVATE

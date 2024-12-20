@@ -15,6 +15,8 @@
 #include "vector-field.h"
 #include "crutches.h"
 #include "fixed.h"
+#include "missions.h"
+#include "buddies.h"
 
 using namespace std;
 
@@ -29,6 +31,8 @@ namespace Pepega {
         virtual void next(std::optional<std::reference_wrapper<std::ostream>> out) = 0;
         virtual void load(std::ifstream& file) = 0;
         virtual void save(std::ofstream& file) = 0;
+
+        virtual void init_workers(int) = 0;
 
         virtual ~fluid_base() = default;
     };
@@ -50,6 +54,16 @@ namespace Pepega {
         VectorField<velocity_flow_t, value_N, value_M> velocity_flow = {};
         int UT = 0;
         p_t rho[256];
+
+        Array<std::mutex, value_N, value_M> p_mutex{};
+
+        std::vector<std::unique_ptr<Task>> g_tasks;
+        std::vector<std::unique_ptr<Task>> p_tasks;
+        std::vector<std::unique_ptr<Task>> recalc_p_tasks;
+        std::vector<std::unique_ptr<Task>> output_field_task;
+
+        WorkerHandler main_handler{};
+        WorkerHandler output_handler{};
 
         std::tuple<velocity_flow_t, bool, pair<int, int>> propagate_flow(int x, int y, velocity_flow_t lim) {
             last_use[x][y] = UT - 1;
@@ -208,6 +222,15 @@ namespace Pepega {
 
     public:
         fluid() = default;
+
+        void init_workers(int n) override {
+            if (n < 1) {
+                throw std::runtime_error("Must be at least 1 thread");
+            }
+            main_handler.init(n);
+            output_handler.init(1);
+        }
+
 
         void next(std::optional<std::reference_wrapper<std::ostream>> out) override {
             p_t total_delta_p = 0ll;
