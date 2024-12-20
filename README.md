@@ -40,7 +40,7 @@
         std::tie(t, prop, end) = propagate_flow(nx, ny, vp);
     } while (end == std::pair(nx, ny));
   ```
-  - Оптимизировано заполнение векторного поля 
+- Оптимизировано заполнение векторного поля 
   ```cpp
   VectorField<velocity_flow_t, value_N, value_M> velocity_flow = {};
   ```
@@ -52,29 +52,29 @@
        --y;
    }
    ```
-   - Оптимизировано метод ```get``` у класса ```VectorField```
+- Оптимизировано метод ```get``` у класса ```VectorField```
   ```cpp
   Fixed &get(int x, int y, int dx, int dy) {
-       size_t i = ranges::find(deltas, pair(dx, dy)) - deltas.begin();
-       assert(i < deltas.size());
-       return v[x][y][i];
-   }
+      size_t i = ranges::find(deltas, pair(dx, dy)) - deltas.begin();
+      assert(i < deltas.size());
+      return v[x][y][i];
+  }
   ```
   заменой на 
-   ```cpp
-   T &get(int x, int y, int dx, int dy) {
-       switch ((dx << 1) + dy) {
-           case 1:
-               return v[x][y][3];
-           case 2:
-               return v[x][y][1];
-           case -1:
-               return v[x][y][2];
-           default:
-               return v[x][y][0];
-       }
-   }
-   ```
+  ```cpp
+  T &get(int x, int y, int dx, int dy) {
+      switch ((dx << 1) + dy) {
+          case 1:
+              return v[x][y][3];
+          case 2:
+              return v[x][y][1];
+          case -1:
+              return v[x][y][2];
+          default:
+              return v[x][y][0];
+      }
+  }
+  ```
 ### 2. Удаление кода, который не используется
 
 ## Параллелизм
